@@ -133,7 +133,7 @@ def vehicle_update(t,x,u, params={}):
            subplots= [None, None]
         # Figure out the plot bounds and indices
         v_min = vref - 1.2; v_max = vref + 0.5; v_ind = sys.find_output('v')
-        u_min = 0; u_max = 2 if antiwindup else 1; u_ind = ssys.find_output('u')
+        u_min = 0; u_max = 2 if antiwindup else 1; u_ind = sys.find_output('u')
         
         # Make sure the upper and lower boudns on v are OK
         while max(y[v_ind]) > v_max: v_max +=1
@@ -173,4 +173,54 @@ def vehicle_update(t,x,u, params={}):
             
             return subplot_axes
         
+        def sf_update(t,z,u, params={}):
+            y ,r = u[1], u[2]
+            return y- r
+        
+        # State Space Controller 
+        def sf_output(t,z,u,params={}):
+            # Get the controller parameters 
+            K = params.get('K', 0)
+            ki = params.get('ki',0)
+            kf = params.get('kf',0)
+            xd = params.get('xd', 0)
+            yd = params.get('yd', 0)
+            ud = params.get('ud', 0)
             
+        # Get the system state and ref. input
+            x,y,r = u[0], u[1], u[2]
+            
+            return ud - K * (x - xd) - ki * z + kf * (r - yd)
+        # Create the input/output system for the controller
+        control_sf = ct.NonlinearIOSystem(
+            sf_update, sf_output, name= 'control',
+            inputs = ('x', 'y', 'r'),
+            outputs = ('u'),
+            states = ('z'))
+        # Create the closed loop system for the state space controller
+        cruise_sf = ct.InterconnectedSystem(
+            (vehicle, control_sf), name='cruise',
+            connections=(
+                ('vehicle.u', 'control.u'),
+                ('control.x', 'vehicle.v'),
+                ('control.y', 'vehicle.v')),
+            inplist=('control.r','vehicle.gear', 'vehicle.theta'),
+            outlist=('control.u', 'vehicle.v'), outputs=['u','v'])
+        
+        
+        # Define the time and input vectors
+        T = np.linspace (0,25,501)
+        vref = 20* np.ones(T.shape)
+        gear = 4 * np.ones(T.shape)
+        theta0 = np.zeros (T.shape)
+        
+        # Find the equilibrium point for the system
+        Xeq, Ueq = ct.find_eqpt(
+            vehicle, [vref[0]], [0,gear[0], theta-[0]], y0=[vref[0]], iu=[1,2])
+        print ("Xeq = ", Xeq)
+        print ("Ueq = ", Ueq)
+        
+        # Compute the olinearized system at the eq pt
+        cruise_linearized = ct.linearize(vehicle, Xeq, [Ueq[0],gear[0],0])
+             
+        
