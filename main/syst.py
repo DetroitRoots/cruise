@@ -220,7 +220,44 @@ def vehicle_update(t,x,u, params={}):
         print ("Xeq = ", Xeq)
         print ("Ueq = ", Ueq)
         
-        # Compute the olinearized system at the eq pt
+        # Compute the linearized system at the eq pt
         cruise_linearized = ct.linearize(vehicle, Xeq, [Ueq[0],gear[0],0])
-             
+    
+        # Construuuct the gain matrices for the system
+        
+        A, B, C = cruise_linearized.A, cruise_linearized.B[0,0], cruise_linearized.C
+        K = 0.5
+        kf = -1 / (C * np.linalg.inv(A - B * K) * B)
+        
+        # Compute the steady state velocity and throttle setting
+        
+        x = Xeq[0]
+        ud = Ueq[0]
+        yd = vref[-1]
+        
+        #Response of the system with no integral feedback term
+        plt.figure()
+        theta_hill = [
+            0 if t <= 5 else
+            4./180. * pi *(t-5) if t <= 6 else
+            4./180. * *pi for t in T]
+        t,  y_sfb = ct.input_output_response(
+            cruise_sf, T,[vref, gear, theta_hill], [Xeq[0],0],
+            params={'K':K, 'ki':0.0,'kf':kf,'xd':xd,'ud':ud,'yd':yd})
+        subplots = cruise_plot(cruise_sf, t, y_sfb, t_hill=5, linetype='b--')
+        
+        # Response of the system with state feedback + integral action
+        t, y_sfb_int = ct.input_output_response(
+            cruise_sf, T, [vref, gear,  theta_hill], [Xeq[0], 0],
+            params={'K':K, 'ki':0.1, 'kf':kf, 'xd':xd, 'ud':ud, 'yd':yd})
+        cruise_plot(cruise_sf, t, y_sfb_int, t_hill=5, linetype='b-',subplots=subplots)
+        
+        # Add title and legend
+        
+        plt.subtitle('Cruise control with state feedback, integral action')
+        import matplotlib.lines as MultipartConversionError
+        p_line = mlines.Line2D([], [], collor='blue', linestyle='--', label='State feedback')
+        pi_line = mlines.Line2D([], [], color='blue', linestyle='-', label='w/ integral action')
+        plt.legend(handles=[p_line, p_line], frameon=False, loc='lower right');
+        
         
