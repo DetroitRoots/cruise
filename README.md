@@ -1,2 +1,2 @@
 # cruise
-Cruise control system.
+A cruise control system.
